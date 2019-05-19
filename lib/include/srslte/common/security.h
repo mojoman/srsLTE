@@ -177,6 +177,39 @@ uint8_t security_milenage_f5_star( uint8_t *k,
                                    uint8_t *rand,
                                    uint8_t *ak);
 
+/******************************************************************************
+ * STREEG Authentication support, as per MR.26.02.002-2016 TC26
+ *****************************************************************************/
+uint8_t streeg_compute_opc( uint8_t *k,
+                            uint8_t *op,
+                            uint8_t *opc);
+
+uint8_t security_streeg_f1( uint8_t *k,
+                            uint8_t *op,
+                            uint8_t *rand,
+                            uint8_t *sqn,
+                            uint8_t *amf,
+                            uint8_t *mac_a);
+
+uint8_t security_streeg_f1_star( uint8_t *k,
+                                 uint8_t *op,
+                                 uint8_t *rand,
+                                 uint8_t *sqn,
+                                 uint8_t *amf,
+                                 uint8_t *mac_s);
+
+uint8_t security_streeg_f2345( uint8_t *k,
+                               uint8_t *op,
+                               uint8_t *rand,
+                               uint8_t *res,
+                               uint8_t *ck,
+                               uint8_t *ik,
+                               uint8_t *ak);
+
+uint8_t security_streeg_f5_star( uint8_t *k,
+                                 uint8_t *op,
+                                 uint8_t *rand,
+                                 uint8_t *ak);
 
 } // namespace srslte
 

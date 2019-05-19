@@ -356,4 +356,100 @@ LIBLTE_ERROR_ENUM liblte_security_milenage_f5_star(uint8 *k,
                                                    uint8 *rand,
                                                    uint8 *ak);
 
+
+/******************************************************************************
+ * STREEG Authentication support, as per MR.26.02.002-2016 TC26
+ *****************************************************************************/
+/*********************************************************************
+    Name: streeg_compute_OPc
+
+    Description: Computes OPc from OP and K.
+
+    Document Reference: 35.206 v10.0.0 Annex 3
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_streeg_compute_opc(uint8            *k,
+                                            uint8            *op,
+                                            uint8            *op_c);
+/*********************************************************************
+    Name: liblte_security_streeg_f1
+
+    Description: "Streeg" security function F1.  Computes network
+                 authentication code MAC-A from key K, random
+                 challenge RAND, sequence number SQN, and
+                 authentication management field AMF.
+
+    Document Reference: 35.206 v10.0.0 Annex 3
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_security_streeg_f1(uint8 *k,
+                                            uint8 *op,
+                                            uint8 *rand,
+                                            uint8 *sqn,
+                                            uint8 *amf,
+                                            uint8 *mac_a);
+
+/*********************************************************************
+    Name: liblte_security_streeg_f1_star
+
+    Description: "Streeg" security function F1*.  Computes resynch
+                 authentication code MAC-S from key K, random
+                 challenge RAND, sequence number SQN, and
+                 authentication management field AMF.
+
+    Document Reference: 35.206 v10.0.0 Annex 3
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_security_streeg_f1_star(uint8 *k,
+                                                 uint8 *op,
+                                                 uint8 *rand,
+                                                 uint8 *sqn,
+                                                 uint8 *amf,
+                                                 uint8 *mac_s);
+
+/*********************************************************************
+    Name: liblte_security_streeg_f2345
+
+    Description: "Streeg" security functions F2, F3, F4, and F5.
+                 Computes response RES, confidentiality key CK,
+                 integrity key IK, and anonymity key AK from random
+                 challenge RAND.
+
+    Document Reference: 35.206 v10.0.0 Annex 3
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_security_streeg_f2345(uint8 *k,
+                                               uint8 *op,
+                                               uint8 *rand,
+                                               uint8 *res,
+                                               uint8 *ck,
+                                               uint8 *ik,
+                                               uint8 *ak);
+
+/*********************************************************************
+    Name: liblte_security_streeg_f5_star
+
+    Description: "Streeg" security function F5*.  Computes resynch
+                 anonymity key AK from key K and random challenge
+                 RAND.
+
+    Document Reference: 35.206 v10.0.0 Annex 3
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_security_streeg_f5_star(uint8 *k,
+                                                 uint8 *op,
+                                                 uint8 *rand,
+                                                 uint8 *ak);
+
 #endif // SRSLTE_LIBLTE_SECURITY_H

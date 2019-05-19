@@ -33,6 +33,7 @@ namespace srsue {
 typedef enum{
   auth_algo_milenage = 0,
   auth_algo_xor,
+  auth_algo_streeg
 }auth_algo_t;
 
 class usim_args_t

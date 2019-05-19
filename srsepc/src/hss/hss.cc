@@ -128,8 +128,10 @@ bool hss::read_db_file(std::string db_filename)
         ue_ctx->algo = HSS_ALGO_XOR;
       } else if (split[1] == std::string("mil")) {
         ue_ctx->algo = HSS_ALGO_MILENAGE;
+      } else if (split[1] == std::string("str")) {
+        ue_ctx->algo = HSS_ALGO_STREEG;
       } else {
-        m_hss_log->error("Neither XOR nor MILENAGE configured.\n");
+        m_hss_log->error("Neither XOR nor MILENAGE nor STREEG configured.\n");
         return false;
       }
       ue_ctx->imsi         = atoll(split[2].c_str());
@@ -228,7 +230,16 @@ bool hss::write_db_file(std::string db_filename)
   while (it != m_imsi_to_ue_ctx.end()) {
     m_db_file << it->second->name;
     m_db_file << ",";
-    m_db_file << (it->second->algo == HSS_ALGO_XOR ? "xor" : "mil");
+    if (it->second->algo == HSS_ALGO_XOR)
+    {
+        m_db_file << "xor";
+    } else if (it->second->algo == HSS_ALGO_STREEG)
+    {
+        m_db_file << "str";
+    } else
+    {
+        m_db_file << "mil";
+    }
     m_db_file << ",";
     m_db_file << std::setfill('0') << std::setw(15) << it->second->imsi;
     m_db_file << ",";
@@ -280,6 +291,9 @@ bool hss::gen_auth_info_answer(uint64_t imsi, uint8_t* k_asme, uint8_t* autn, ui
     case HSS_ALGO_MILENAGE:
       ret = gen_auth_info_answer_milenage(imsi, k_asme, autn, rand, xres);
       break;
+    case HSS_ALGO_STREEG:
+      ret = gen_auth_info_answer_streeg(imsi, k_asme, autn, rand, xres);
+      break;
   }
   increment_ue_sqn(imsi);
   return ret;
@@ -313,6 +327,60 @@ bool hss::gen_auth_info_answer_milenage(uint64_t imsi, uint8_t* k_asme, uint8_t*
   m_hss_log->debug_hex(ak, 6, "User AK: ");
 
   srslte::security_milenage_f1(k, opc, rand, sqn, amf, mac);
+
+  m_hss_log->debug_hex(sqn, 6, "User SQN : ");
+  m_hss_log->debug_hex(mac, 8, "User MAC : ");
+
+  // Generate K_asme
+  srslte::security_generate_k_asme(ck, ik, ak, sqn, mcc, mnc, k_asme);
+
+  m_hss_log->debug("User MCC : %x  MNC : %x \n", mcc, mnc);
+  m_hss_log->debug_hex(k_asme, 32, "User k_asme : ");
+
+  // Generate AUTN (autn = sqn ^ ak |+| amf |+| mac)
+  for (int i = 0; i < 6; i++) {
+    autn[i] = sqn[i] ^ ak[i];
+  }
+  for (int i = 0; i < 2; i++) {
+    autn[6 + i] = amf[i];
+  }
+  for (int i = 0; i < 8; i++) {
+    autn[8 + i] = mac[i];
+  }
+  m_hss_log->debug_hex(autn, 16, "User AUTN: ");
+
+  set_last_rand(imsi, rand);
+  return true;
+}
+
+bool hss::gen_auth_info_answer_streeg(uint64_t imsi, uint8_t* k_asme, uint8_t* autn, uint8_t* rand, uint8_t* xres)
+{
+  uint8_t k[16];
+  uint8_t amf[2];
+  uint8_t opc[16];
+  uint8_t sqn[6];
+
+  uint8_t ck[16];
+  uint8_t ik[16];
+  uint8_t ak[6];
+  uint8_t mac[8];
+
+  if (!get_k_amf_opc_sqn(imsi, k, amf, opc, sqn)) {
+    return false;
+  }
+  gen_rand(rand);
+
+  srslte::security_streeg_f2345(k, opc, rand, xres, ck, ik, ak);
+
+  m_hss_log->debug_hex(k, 16, "User Key : ");
+  m_hss_log->debug_hex(opc, 16, "User OPc : ");
+  m_hss_log->debug_hex(rand, 16, "User Rand : ");
+  m_hss_log->debug_hex(xres, 8, "User XRES: ");
+  m_hss_log->debug_hex(ck, 16, "User CK: ");
+  m_hss_log->debug_hex(ik, 16, "User IK: ");
+  m_hss_log->debug_hex(ak, 6, "User AK: ");
+
+  srslte::security_streeg_f1(k, opc, rand, sqn, amf, mac);
 
   m_hss_log->debug_hex(sqn, 6, "User SQN : ");
   m_hss_log->debug_hex(mac, 8, "User MAC : ");
@@ -483,6 +551,9 @@ bool hss::resync_sqn(uint64_t imsi, uint8_t* auts)
     case HSS_ALGO_MILENAGE:
       ret = resync_sqn_milenage(imsi, auts);
       break;
+    case HSS_ALGO_STREEG:
+      ret = resync_sqn_streeg(imsi, auts);
+      break;
   }
 
   increment_seq_after_resync(imsi);
@@ -548,6 +619,64 @@ bool hss::resync_sqn_milenage(uint64_t imsi, uint8_t* auts)
   }
 
   srslte::security_milenage_f1_star(k, opc, last_rand, sqn_ms, amf, mac_s_tmp);
+  m_hss_log->debug_hex(mac_s_tmp, 8, "MAC calc : ");
+
+  set_sqn(imsi, sqn_ms);
+  return true;
+}
+
+bool hss::resync_sqn_streeg(uint64_t imsi, uint8_t* auts)
+{
+  uint8_t last_rand[16];
+  uint8_t ak[6];
+  uint8_t mac_s[8];
+  uint8_t sqn_ms_xor_ak[6];
+
+  uint8_t k[16];
+  uint8_t amf[2];
+  uint8_t opc[16];
+  uint8_t sqn[6];
+
+  if (!get_k_amf_opc_sqn(imsi, k, amf, opc, sqn)) {
+    return false;
+  }
+
+  get_last_rand(imsi, last_rand);
+
+  for (int i = 0; i < 6; i++) {
+    sqn_ms_xor_ak[i] = auts[i];
+  }
+
+  for (int i = 0; i < 8; i++) {
+    mac_s[i] = auts[i + 6];
+  }
+
+  m_hss_log->debug_hex(k, 16, "User Key : ");
+  m_hss_log->debug_hex(opc, 16, "User OPc : ");
+  m_hss_log->debug_hex(last_rand, 16, "User Last Rand : ");
+  m_hss_log->debug_hex(auts, 16, "AUTS : ");
+  m_hss_log->debug_hex(sqn_ms_xor_ak, 6, "SQN xor AK : ");
+  m_hss_log->debug_hex(mac_s, 8, "MAC : ");
+
+  srslte::security_streeg_f5_star(k, opc, last_rand, ak);
+  m_hss_log->debug_hex(ak, 6, "Resynch AK : ");
+
+  uint8_t sqn_ms[6];
+  for (int i = 0; i < 6; i++) {
+    sqn_ms[i] = sqn_ms_xor_ak[i] ^ ak[i];
+  }
+  m_hss_log->debug_hex(sqn_ms, 6, "SQN MS : ");
+  m_hss_log->debug_hex(sqn, 6, "SQN HE : ");
+
+  m_hss_log->debug_hex(amf, 2, "AMF : ");
+
+  uint8_t mac_s_tmp[8];
+
+  for (int i = 0; i < 2; i++) {
+    amf[i] = 0;
+  }
+
+  srslte::security_streeg_f1_star(k, opc, last_rand, sqn_ms, amf, mac_s_tmp);
   m_hss_log->debug_hex(mac_s_tmp, 8, "MAC calc : ");
 
   set_sqn(imsi, sqn_ms);

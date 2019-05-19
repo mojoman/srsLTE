@@ -50,7 +50,7 @@ typedef struct {
   uint16_t    mnc;
 } hss_args_t;
 
-enum hss_auth_algo { HSS_ALGO_XOR, HSS_ALGO_MILENAGE };
+enum hss_auth_algo { HSS_ALGO_XOR, HSS_ALGO_MILENAGE, HSS_ALGO_STREEG };
 
 typedef struct {
   std::string        name;
@@ -94,9 +94,11 @@ private:
 
   bool gen_auth_info_answer_milenage(uint64_t imsi, uint8_t* k_asme, uint8_t* autn, uint8_t* rand, uint8_t* xres);
   bool gen_auth_info_answer_xor(uint64_t imsi, uint8_t* k_asme, uint8_t* autn, uint8_t* rand, uint8_t* xres);
+  bool gen_auth_info_answer_streeg(uint64_t imsi, uint8_t* k_asme, uint8_t* autn, uint8_t* rand, uint8_t* xres);
 
   bool resync_sqn_milenage(uint64_t imsi, uint8_t* auts);
   bool resync_sqn_xor(uint64_t imsi, uint8_t* auts);
+  bool resync_sqn_streeg(uint64_t imsi, uint8_t* auts);
 
   std::vector<std::string> split_string(const std::string& str, char delimiter);
   void                     get_uint_vec_from_hex_str(const std::string& key_str, uint8_t* key, uint len);

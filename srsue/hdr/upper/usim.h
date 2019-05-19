@@ -90,6 +90,14 @@ private:
                                       uint8_t  *res,
                                       int      *res_len,
                                       uint8_t  *k_asme);
+  auth_result_t gen_auth_res_streeg(uint8_t  *rand,
+                                    uint8_t  *autn_enb,
+                                    uint16_t  mcc,
+                                    uint16_t  mnc,
+                                    uint8_t  *res,
+                                    int      *res_len,
+                                    uint8_t  *k_asme);
+
   auth_result_t gen_auth_res_xor(uint8_t  *rand,
                                  uint8_t  *autn_enb,
                                  uint16_t  mcc,

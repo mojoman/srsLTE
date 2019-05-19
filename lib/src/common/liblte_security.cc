@@ -36,6 +36,7 @@
 
 #include "srslte/common/liblte_security.h"
 #include "srslte/common/liblte_ssl.h"
+#include "srslte/common/gost3411-2012-core.h"
 #include "math.h"
 
 /*******************************************************************************
@@ -1445,6 +1446,514 @@ LIBLTE_ERROR_ENUM liblte_compute_opc(uint8            *k,
       op_c[i] ^= op[i];
     }
     err = LIBLTE_SUCCESS;
+  }
+  return err;
+}
+
+/******************************************************************************
+ * STREEG Authentication support, as per MR.26.02.002-2016 TC26
+ *****************************************************************************/
+
+/*********************************************************************
+    Name: liblte_security_streeg_f1
+
+    Description: "Streeg" security function F1.  Computes network
+                 authentication code MAC-A from key K, random
+                 challenge RAND, sequence number SQN, and
+                 authentication management field AMF.
+
+    Document Reference: 35.206 v10.0.0 Annex 3
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_security_streeg_f1(uint8 *k,
+                                            uint8 *op_c,
+                                            uint8 *rand,
+                                            uint8 *sqn,
+                                            uint8 *amf,
+                                            uint8 *mac_a)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32              i;
+    uint8               temp[16];
+    uint8               in1[64];
+    uint8               digest[64];
+    GOST34112012Context *CTX;
+    void                **p;
+
+    if(k     != NULL &&
+       op_c  != NULL &&
+       rand  != NULL &&
+       sqn   != NULL &&
+       amf   != NULL &&
+       mac_a != NULL)
+    {
+        p = reinterpret_cast<void**>(&CTX);
+        if (posix_memalign(p, (size_t) 16, sizeof(GOST34112012Context)))
+            return(err);
+
+        // Construct in1
+        // F1 = K(128)||RAND(128)||SQN(48)||AMF(16)||OPc(16)||add(32)||inf_2(7)||algoname(24)||
+        // Copy key bytes first
+        for(i=0; i<16; i++)
+        {
+            in1[i] = k[i];
+        }
+        // in1 - 16 bytes
+
+        // RAND
+        for(i=0; i<16; i++)
+        {
+            in1[16+i] = rand[i];
+        }
+        // in1 -- 32 bytes
+
+        // SQN
+        for(i=0; i<6; i++)
+        {
+            in1[32+i]   = sqn[i];
+        }
+        // in1 -- 38 bytes
+
+        // AMF
+        for(i=0; i<2; i++)
+        {
+            in1[38+i]  = amf[i];
+        }
+        //in1 -- 40 bytes
+
+        // OP_c
+        for(i=0; i<16; i++)
+        {
+            in1[40+i]  = op_c[i];
+        }
+        // in1 -- 56 bytes
+
+        // ADD
+        for(i=0; i<4; i++)
+        {
+            in1[56+i] = 0x00;
+        }
+        // Now we need to add the following:
+        // 6 zero bits + 1 + 'AUT'. Since the resulting string shall be
+        // exactly 511 bits, according to the Streebog standard this again
+        // would have to be padded with 1. So we do this manually:
+        //
+        // 00000010 10000010 10101010 10101001
+        // 2        130      170      169
+        in1[60] = 2;
+        in1[61] = 130;
+        in1[62] = 170;
+        in1[63] = 169;
+
+        GOST34112012Init(CTX, 512);
+        GOST34112012Update(CTX, in1, 64);
+        GOST34112012Final(CTX, &digest[0]);
+        GOST34112012Cleanup(CTX);
+
+        // Return MAC-A
+        for(i=0; i<8; i++)
+        {
+            mac_a[i] = digest[63-i];
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+
+/*********************************************************************
+    Name: liblte_security_streeg_f1_star
+
+    Description: "Streeg" security function F1*.  Computes resynch
+                 authentication code MAC-S from key K, random
+                 challenge RAND, sequence number SQN, and
+                 authentication management field AMF.
+
+    Document Reference: 35.206 v10.0.0 Annex 3
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_security_streeg_f1_star(uint8 *k,
+                                                 uint8 *op_c,
+                                                 uint8 *rand,
+                                                 uint8 *sqn,
+                                                 uint8 *amf,
+                                                 uint8 *mac_s)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32              i;
+    uint8               temp[16];
+    uint8               in1[64];
+    uint8               digest[64];
+    GOST34112012Context *CTX;
+    void                **p;
+
+    if(k     != NULL &&
+       op_c  != NULL &&
+       rand  != NULL &&
+       sqn   != NULL &&
+       amf   != NULL &&
+       mac_s != NULL)
+    {
+        p = reinterpret_cast<void**>(&CTX);
+        if (posix_memalign(p, (size_t) 16, sizeof(GOST34112012Context)))
+            return(err);
+
+        // Construct in1
+        // F1 = K(128)||RAND(128)||SQN(48)||AMF(16)||OPc(16)||add(32)||inf_2(7)||algoname(24)||
+        // Copy key bytes first
+        for(i=0; i<16; i++)
+        {
+            in1[i] = k[i];
+        }
+        // in1 - 16 bytes
+
+        // RAND
+        for(i=0; i<16; i++)
+        {
+            in1[16+i] = rand[i];
+        }
+        // in1 -- 32 bytes
+
+        // SQN
+        for(i=0; i<6; i++)
+        {
+            in1[32+i]   = sqn[i];
+        }
+        // in1 -- 38 bytes
+
+        // AMF
+        for(i=0; i<2; i++)
+        {
+            in1[38+i]  = amf[i];
+        }
+        //in1 -- 40 bytes
+
+        // OP_c
+        for(i=0; i<16; i++)
+        {
+            in1[40+i]  = op_c[i];
+        }
+        // in1 -- 56 bytes
+
+        // ADD
+        for(i=0; i<4; i++)
+        {
+            in1[56+i] = 0x00;
+        }
+        // Now we need to add the following:
+        // 6 zero bits + 1 + 'AUT'. Since the resulting string shall be
+        // exactly 511 bits, according to the Streebog standard this again
+        // would have to be padded with 1. So we do this manually:
+        //
+        // 00000010 10000010 10101010 10101001
+        // 2        130      170      169
+        in1[60] = 2;
+        in1[61] = 130;
+        in1[62] = 170;
+        in1[63] = 169;
+
+        GOST34112012Init(CTX, 512);
+        GOST34112012Update(CTX, in1, 64);
+        GOST34112012Final(CTX, &digest[0]);
+        GOST34112012Cleanup(CTX);
+
+        // Return MAC-S
+        for(i=0; i<8; i++)
+        {
+            mac_s[i] = digest[55-i];
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+
+}
+
+/*********************************************************************
+    Name: liblte_security_streeg_f2345
+
+    Description: "Streeg" security functions F2, F3, F4, and F5.
+                 Computes response RES, confidentiality key CK,
+                 integrity key IK, and anonymity key AK from random
+                 challenge RAND.
+
+    Document Reference: 35.206 v10.0.0 Annex 3
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_security_streeg_f2345(uint8 *k,
+                                               uint8 *op_c,
+                                               uint8 *rand,
+                                               uint8 *res,
+                                               uint8 *ck,
+                                               uint8 *ik,
+                                               uint8 *ak)
+{
+
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32              i;
+    uint8               temp[16];
+    uint8               in1[64];
+    uint8               digest[64];
+    GOST34112012Context *CTX;
+    void                **p;
+
+    if(k    != NULL &&
+       op_c != NULL &&
+       rand != NULL &&
+       res  != NULL &&
+       ck   != NULL &&
+       ik   != NULL &&
+       ak   != NULL)
+    {
+        p = reinterpret_cast<void**>(&CTX);
+        if (posix_memalign(p, (size_t) 16, sizeof(GOST34112012Context)))
+            return(err);
+
+        // Construct in1
+        // F1 = K(128)||RAND(128)||OPc(16)||add(32)||inf_3(7)||algoname(24)
+        // Copy key bytes first
+        for(i=0; i<16; i++)
+        {
+            in1[i] = k[i];
+        }
+        // in1 - 16 bytes
+
+        // RAND
+        for(i=0; i<16; i++)
+        {
+            in1[16+i] = rand[i];
+        }
+        // in1 -- 32 bytes
+
+        // OP_c
+        for(i=0; i<16; i++)
+        {
+            in1[32+i]  = op_c[i];
+        }
+        // in1 -- 48 bytes
+
+        // ADD
+        for(i=0; i<4; i++)
+        {
+            in1[48+i] = 0x00;
+        }
+
+        // Now we need to add the following:
+        // 5 zero bits + 1 + 0 + 'AUT'. Since the resulting string shall be
+        // exactly 477 bits, according to the Streebog standard this again
+        // would have to be padded with 511-477=34 zero bits and 1.
+        // So we do this manually:
+        //
+        // 00000100 10000010 10101010 10101000
+        // 4        130      170      168
+        in1[52] = 4;
+        in1[53] = 130;
+        in1[54] = 170;
+        in1[55] = 168;
+        // Fill up the rest with zeros, and set last byte to 1.
+        for(i=0; i<7; i++)
+        {
+            in1[56+i] = 0x0;
+        }
+        in1[63] = 0x01;
+
+        GOST34112012Init(CTX, 512);
+        GOST34112012Update(CTX, in1, 64);
+        GOST34112012Final(CTX, &digest[0]);
+        GOST34112012Cleanup(CTX);
+
+        // Return RES
+        for(i=0; i<8; i++)
+        {
+            res[i] = digest[63-i];
+        }
+
+        // Return AK
+        for(i=0; i<6; i++)
+        {
+            ak[i] = digest[23-i];
+        }
+
+        // Return CK
+        for(i=0; i<16; i++)
+        {
+            ck[i] = digest[55-i];
+        }
+
+        // Return IK
+        for(i=0; i<16; i++)
+        {
+            ik[i] = digest[39-i];
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+    return(err);
+}
+
+/*********************************************************************
+    Name: liblte_security_streeg_f5_star
+
+    Description: "Streeg" security function F5*.  Computes resynch
+                 anonymity key AK from key K and random challenge
+                 RAND.
+
+    Document Reference: 35.206 v10.0.0 Annex 3
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_security_streeg_f5_star(uint8 *k,
+                                                 uint8 *op_c,
+                                                 uint8 *rand,
+                                                 uint8 *ak)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32              i;
+    uint8               temp[16];
+    uint8               in1[64];
+    uint8               digest[64];
+    GOST34112012Context *CTX;
+    void                **p;
+
+    if(k    != NULL &&
+       op_c != NULL &&
+       rand != NULL &&
+       ak   != NULL)
+    {
+        p = reinterpret_cast<void**>(&CTX);
+        if (posix_memalign(p, (size_t) 16, sizeof(GOST34112012Context)))
+            return(err);
+
+        // Construct in1
+        // F1 = K(128)||RAND(128)||OPc(16)||add(32)||inf_3(7)||algoname(24)
+        // Copy key bytes first
+        for(i=0; i<16; i++)
+        {
+            in1[i] = k[i];
+        }
+        // in1 - 16 bytes
+
+        // RAND
+        for(i=0; i<16; i++)
+        {
+            in1[16+i] = rand[i];
+        }
+        // in1 -- 32 bytes
+
+        // OP_c
+        for(i=0; i<16; i++)
+        {
+            in1[32+i]  = op_c[i];
+        }
+        // in1 -- 48 bytes
+
+        // ADD
+        for(i=0; i<4; i++)
+        {
+            in1[48+i] = 0x00;
+        }
+
+        // Now we need to add the following:
+        // 5 zero bits + 1 + 0 + 'AUT'. Since the resulting string shall be
+        // exactly 477 bits, according to the Streebog standard this again
+        // would have to be padded with 511-477=34 zero bits and 1.
+        // So we do this manually:
+        //
+        // 00000100 10000010 10101010 10101000
+        // 4        130      170      168
+        in1[52] = 4;
+        in1[53] = 130;
+        in1[54] = 170;
+        in1[55] = 168;
+        // Fill up the rest with zeros, and set last byte to 1.
+        for(i=0; i<7; i++)
+        {
+            in1[56+i] = 0x0;
+        }
+        in1[63] = 0x01;
+
+        GOST34112012Init(CTX, 512);
+        GOST34112012Update(CTX, in1, 64);
+        GOST34112012Final(CTX, &digest[0]);
+        GOST34112012Cleanup(CTX);
+
+        // Return AK
+        for(i=0; i<6; i++)
+        {
+            ak[i] = digest[17-i];
+        }
+        err = LIBLTE_SUCCESS;
+    }
+    return(err);
+}
+
+/*********************************************************************
+    Name: liblte_streeg_compute_opc
+
+    Description: Computes OPc from OP and K.
+
+    Document Reference: 35.206 v10.0.0 Annex 3
+*********************************************************************/
+
+LIBLTE_ERROR_ENUM liblte_streeg_compute_opc(uint8            *k,
+                                            uint8            *op,
+                                            uint8            *op_c)
+{
+  uint32 i;
+  LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+  uint8               in1[64];
+  uint8               digest[64];
+  GOST34112012Context *CTX;
+  void                **p;
+
+  if(k    != NULL &&
+     op   != NULL &&
+     op_c  != NULL)
+  {
+      p = reinterpret_cast<void**>(&CTX);
+
+      if (posix_memalign(p, (size_t) 16, sizeof(GOST34112012Context)))
+          return(err);
+
+      // Construct in1
+      // F1 = K(128)||algoname(24)||OP(128)||inf_1(7)
+      // Copy key bytes first
+      for(i=0; i<16; i++)
+      {
+          in1[i] = k[i];
+      }
+      // in1 - 16 bytes
+
+      // algoname
+      in1[16] = 'A';
+      in1[17] = 'U';
+      in1[18] = 'T';
+      // in1 - 19 bytes
+
+      // OP
+      for(i=0; i<16; i++)
+      {
+          in1[19+i] = op[i];
+      }
+      // in1 -- 35 bytes
+
+      // Now we need to fill up the rest with 0 bits (inf_1 is zeros),
+      // up until the last byte. Set last byte to 1.
+      for(i=0; i<28; i++)
+      {
+          in1[35+i] = 0x0;
+      }
+      in1[63] = 0x01;
+
+      GOST34112012Init(CTX, 512);
+      GOST34112012Update(CTX, in1, 64);
+      GOST34112012Final(CTX, &digest[0]);
+      GOST34112012Cleanup(CTX);
+
+      // Return OP_c
+      for(i=0; i<16; i++)
+      {
+          op_c[i] = digest[63-i];
+      }
+
+      err = LIBLTE_SUCCESS;
   }
   return err;
 }

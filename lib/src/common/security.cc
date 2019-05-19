@@ -290,5 +290,75 @@ uint8_t security_milenage_f5_star( uint8_t *k,
                                           ak);
 }
 
+/******************************************************************************
+ * STREEG Authentication support, as per MR.26.02.002-2016 TC26
+ *****************************************************************************/
+uint8_t streeg_compute_opc( uint8_t *k,
+                            uint8_t *op,
+                            uint8_t *opc)
+{
+ return liblte_streeg_compute_opc(k,
+                                  op,
+                                  opc);
+}
+
+uint8_t security_streeg_f1( uint8_t *k,
+                            uint8_t *op,
+                            uint8_t *rand,
+                            uint8_t *sqn,
+                            uint8_t *amf,
+                            uint8_t *mac_a)
+{
+  return liblte_security_streeg_f1(k,
+                                   op,
+                                   rand,
+                                   sqn,
+                                   amf,
+                                   mac_a);
+}
+
+uint8_t security_streeg_f1_star( uint8_t *k,
+                                 uint8_t *op,
+                                 uint8_t *rand,
+                                 uint8_t *sqn,
+                                 uint8_t *amf,
+                                 uint8_t *mac_s)
+{
+  return liblte_security_streeg_f1_star(k,
+                                        op,
+                                        rand,
+                                        sqn,
+                                        amf,
+                                        mac_s);
+}
+
+uint8_t security_streeg_f2345( uint8_t *k,
+                               uint8_t *op,
+                               uint8_t *rand,
+                               uint8_t *res,
+                               uint8_t *ck,
+                               uint8_t *ik,
+                               uint8_t *ak)
+{
+  return liblte_security_streeg_f2345(k,
+                                      op,
+                                      rand,
+                                      res,
+                                      ck,
+                                      ik,
+                                      ak);
+}
+
+uint8_t security_streeg_f5_star( uint8_t *k,
+                                 uint8_t *op,
+                                 uint8_t *rand,
+                                 uint8_t *ak)
+{
+  return liblte_security_streeg_f5_star(k,
+                                        op,
+                                        rand,
+                                        ak);
+}
+
 
 } // namespace srsue

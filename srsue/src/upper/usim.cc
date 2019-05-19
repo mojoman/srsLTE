@@ -45,6 +45,10 @@ int usim::init(usim_args_t *args, srslte::log *usim_log_)
     auth_algo = auth_algo_xor;
   }
 
+  if ("streeg" == args->algo) {
+      auth_algo = auth_algo_streeg;
+  }
+
   if(32 == args->k.length()) {
     str_to_hex(args->k, k);
   } else {
@@ -69,6 +73,25 @@ int usim::init(usim_args_t *args, srslte::log *usim_log_)
         usim_log->console("Invalid length for OPc: %zu should be %d\n", args->opc.length(), 32);
       }
     }
+  }
+
+  if (auth_algo == auth_algo_streeg) {
+      if (args->using_op) {
+          if (32 == args->op.length()) {
+              str_to_hex(args->op, op);
+              streeg_compute_opc(k, op, opc);
+          } else {
+              usim_log->error("Invalid length for OP: %zu should be %d\n", args->op.length(), 32);
+              usim_log->console("Invalid length for OP: %zu should be %d\n", args->op.length(), 32);
+          }
+      } else {
+          if (32 == args->opc.length()) {
+              str_to_hex(args->opc, opc);
+          } else {
+              usim_log->error("Invalid length for OPc: %zu should be %d\n", args->opc.length(), 32);
+              usim_log->console("Invalid length for OPc: %zu should be %d\n", args->opc.length(), 32);
+          }
+      }
   }
 
   if(15 == args->imsi.length()) {
@@ -205,6 +228,8 @@ auth_result_t usim::generate_authentication_response(uint8_t  *rand,
 {
   if(auth_algo_xor == auth_algo) {
     return gen_auth_res_xor(rand, autn_enb, mcc, mnc, res, res_len, k_asme);
+  } else if (auth_algo_streeg == auth_algo) {
+    return gen_auth_res_streeg(rand, autn_enb, mcc, mnc, res, res_len, k_asme);
   } else {
     return gen_auth_res_milenage(rand, autn_enb, mcc, mnc, res, res_len, k_asme);
   }
@@ -461,6 +486,85 @@ auth_result_t usim::gen_auth_res_xor(uint8_t  *rand,
   for(i=0;i<8;i++) {
     mac[i] = xdout[i] ^ cdout[i];
   }
+
+  // Construct AUTN
+  for(i=0; i<6; i++)
+  {
+    autn[i] = sqn[i] ^ ak[i];
+  }
+  for(i=0; i<2; i++)
+  {
+    autn[6+i] = amf[i];
+  }
+  for(i=0; i<8; i++)
+  {
+    autn[8+i] = mac[i];
+  }
+
+  // Compare AUTNs
+  for(i=0; i<16; i++)
+  {
+    if(autn[i] != autn_enb[i])
+    {
+      result = AUTH_FAILED;
+    }
+  }
+
+  // Generate K_asme
+  security_generate_k_asme( ck,
+                            ik,
+                            ak,
+                            sqn,
+                            mcc,
+                            mnc,
+                            k_asme);
+
+  return result;
+}
+
+// STREEG Implementation
+
+auth_result_t usim::gen_auth_res_streeg(uint8_t  *rand,
+                                          uint8_t  *autn_enb,
+                                          uint16_t  mcc,
+                                          uint16_t  mnc,
+                                          uint8_t  *res,
+                                          int      *res_len,
+                                          uint8_t  *k_asme)
+{
+  auth_result_t result =  AUTH_OK;
+  uint32_t i;
+  uint8_t  sqn[6];
+
+  // Use RAND and K to compute RES, CK, IK and AK
+  security_streeg_f2345( k,
+                         opc,
+                         rand,
+                         res,
+                         ck,
+                         ik,
+                         ak);
+
+  *res_len = 8;
+
+  // Extract sqn from autn
+  for(i=0;i<6;i++)
+  {
+    sqn[i] = autn_enb[i] ^ ak[i];
+  }
+  // Extract AMF from autn
+  for(int i=0;i<2;i++)
+  {
+    amf[i]=autn_enb[6+i];
+  }
+
+  // Generate MAC
+  security_streeg_f1( k,
+                      opc,
+                      rand,
+                      sqn,
+                      amf,
+                      mac);
 
   // Construct AUTN
   for(i=0; i<6; i++)
